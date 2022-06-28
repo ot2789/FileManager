@@ -236,6 +236,8 @@ def main():
         web.post('/signup', handler.signup),
         web.post('/signin', handler.signin),
         web.get('/logout', handler.logout),
+        web.get('/files/download', handler.download_file),
+        web.get('/files/download/queued', handler.download_file_queued),
     ])
     logging.basicConfig(level=logging.INFO)
     web.run_app(app, port=namespace.port)

@@ -22,7 +22,12 @@ class BaseLoader(Thread):
     DOWNLOAD_TIME = 5
 
     def __init__(self, daemon: bool = False):
-        pass
+        Thread.__init__(self)
+        self.id = str(uuid4())
+        self.daemon = daemon
+
+        if not os.path.exists(self.DOWNLOAD_DIR):
+            os.mkdir(self.DOWNLOAD_DIR)
 
     def download_file(self, filename: str, is_signed: bool, user_id: int) -> str:
         """Download file into /home/{user_name}.
@@ -42,7 +47,25 @@ class BaseLoader(Thread):
 
         """
 
-        pass
+        if is_signed:
+            file_service = FileServiceSigned()
+        else:
+            file_service = FileService()
+
+        file_data = file_service.get_file_data(filename, user_id)
+        full_filename = os.path.join(self.DOWNLOAD_DIR, f'{filename}.{file_service.EXTENSION}')
+
+        i = 0
+        while os.path.exists(full_filename):
+            i += 1
+            full_filename = os.path.join(self.DOWNLOAD_DIR, f'{filename}({i}).{file_service.EXTENSION}')
+
+        with open(full_filename, 'wb') as file_handler:
+            data = bytes(file_data['content'], 'utf-8')
+            file_handler.write(data)
+            logger.info(f'Thread Id: {self.id}. File {filename} is successfully downloaded')
+
+            return f'File {filename}.{file_service.EXTENSION} is successfully downloaded'
 
 
 class FileLoader(BaseLoader):
@@ -51,14 +74,33 @@ class FileLoader(BaseLoader):
     """
 
     def __init__(self, filename: str, user_id: int = None, is_signed: bool = False):
-        pass
+        super().__init__(daemon=False)
+        assert user_id, 'User Id is not set'
+        self.filename = filename
+        self.is_signed = is_signed
+        self.user_id = user_id
+        self.state = 'inited'
+        self.message = None
 
     def run(self):
         """Run thread.
 
         """
 
-        pass
+        self.state = 'started'
+        logger.info('Thread Id: {}. Start downloading file'.format(self.id))
+
+        try:
+            time.sleep(self.DOWNLOAD_TIME)
+            self.state = 'finished'
+            self.message = self.download_file(self.filename, self.is_signed, self.user_id)
+
+        except (AssertionError, ValueError) as err:
+            self.state = 'error'
+            self.message = err
+            logger.error('Thread Id: {}. An error occurred: {}'.format(self.id, err))
+
+        logger.info('Thread Id: {}. Stop downloading file'.format(self.id))
 
 
 class QueuedLoader(BaseLoader):
@@ -67,11 +109,24 @@ class QueuedLoader(BaseLoader):
     """
 
     def __init__(self, queue: Queue):
-        pass
+        super().__init__(daemon=True)
+        self.queue = queue
 
     def run(self):
         """Run thread.
 
         """
 
-        pass
+        logger.info('Thread Id: {}. Start working daemon'.format(self.id))
+
+        while True:
+            request = self.queue.get()
+            time.sleep(self.DOWNLOAD_TIME)
+
+            try:
+                self.download_file(request['filename'], request['is_signed'], request['user_id'])
+
+            except (AssertionError, ValueError) as err:
+                logger.error('Thread Id: {}. An error occurred: {}'.format(self.id, err))
+
+            self.queue.task_done()

@@ -6,6 +6,9 @@ import shutil
 import pytest
 import json
 import logging
+import math
+import time
+import asyncio
 import server.utils as utils
 from datetime import datetime, timedelta
 import server.config
@@ -16,6 +19,7 @@ from server.crypto import HashAPI, AESCipher, RSACipher
 from server.file_service import FileService, FileServiceSigned
 import functools
 import itertools
+from server.file_loader import BaseLoader
 
 # Logging will present extra information when running pytest
 logger = logging.getLogger(__name__)
@@ -23,6 +27,7 @@ logger.setLevel(logging.INFO)
 
 EXTENSION_TXT = 'txt'
 TEST_FOLDER = os.path.abspath('../storage')
+DOWNLOAD_TEST_FOLDER = os.path.abspath('../download')
 TEST_USER_ID = 1
 TEST_FILES_PART_NAME = ['beefDead', '12345678', 'testFile', 'catMouse']
 TEST_FILES_SECURITY = ['low', 'medium', 'low', 'high']
@@ -80,10 +85,20 @@ def create_test_files():
                 data = bytes(sig, 'utf-8')
                 file_handler.write(data)
 
+
 @pytest.fixture(scope="class")
 def erase_db():
     db = DataBase()
     db.init_system()
+
+
+@pytest.fixture(scope="class")
+def change_download_loc():
+    save = BaseLoader.DOWNLOAD_DIR
+    BaseLoader.DOWNLOAD_DIR = DOWNLOAD_TEST_FOLDER
+    yield
+    BaseLoader.DOWNLOAD_DIR = save
+
 
 @pytest.fixture
 def client(loop, aiohttp_client):
@@ -99,6 +114,8 @@ def client(loop, aiohttp_client):
         web.post('/signup', handler.signup),
         web.post('/signin', handler.signin),
         web.get('/logout', handler.logout),
+        web.get('/files/download', handler.download_file),
+        web.get('/files/download/queued', handler.download_file_queued),
     ])
 
     return loop.run_until_complete(aiohttp_client(app))
@@ -117,10 +134,9 @@ def signin_info(user):
     return user
 
 
-def cleanup():
-    os.chdir(TEST_FOLDER)
-    for file in os.listdir(TEST_FOLDER):
-        file_path = os.path.join(TEST_FOLDER, file)
+def cleanup(location):
+    for file in os.listdir(location):
+        file_path = os.path.join(location, file)
 
         if os.path.isfile(file_path):
             os.remove(file_path)
@@ -130,11 +146,14 @@ def cleanup():
 
 @pytest.fixture(scope='function')
 def prepare_data(request):
-    cleanup()
+    os.chdir(TEST_FOLDER)
+    cleanup(TEST_FOLDER)
     create_and_move_to_test_folder()
     create_test_files()
     yield
-    cleanup()
+    cleanup(TEST_FOLDER)
+    cleanup(DOWNLOAD_TEST_FOLDER)
+
 
 @pytest.fixture(scope='function')
 async def auth_header(client):
@@ -164,7 +183,7 @@ async def check_response(resp: ClientResponse, code: int, json_status: str = Non
     return result
 
 
-@pytest.mark.usefixtures("erase_db")
+@pytest.mark.usefixtures("erase_db", "change_download_loc")
 class TestSuite:
     async def test_connection(self, client):
         location = '/'
@@ -255,6 +274,60 @@ class TestSuite:
         resp = await client.get(loc_access, headers={'Authorization': session_id2})
         await check_response(resp, 401, None)
         db_session.close()
+        logger.info('Test success')
+
+    @pytest.mark.parametrize("url_base", ('/files/download', '/files/download/queued',))
+    async def test_download_files(self, client, prepare_data, url_base, auth_header):
+        format_location = url_base + '?filename={}&is_signed={}&user_id={}'
+
+        start_time = time.time()
+
+        for file_name, security, sign, content in \
+                zip(TEST_FILES_NAMES, TEST_FILES_SECURITY, TEST_FILES_SIGNED, TEST_FILES_CONTENTS):
+            location = format_location.format(
+                file_name.replace('.' + EXTENSION_TXT, ''),
+                'true' if sign else 'false',
+                TEST_USER_ID)
+            logger.info(f'Test GET "{location}" - Download file')
+            resp = await client.get(location, headers=auth_header)
+            await check_response(resp, 200, 'success')
+
+        duration = time.time() - start_time
+        if url_base == '/files/download':
+            # When downloading one at a time we multiply by length
+            assert duration > BaseLoader.DOWNLOAD_TIME * len(TEST_FILES_NAMES)
+        else:
+            # In case of queue the get should not hang!
+            # We put here 1.5 seconds to make sure that there is enough time
+            assert duration < 1.5
+
+        start_time = time.time()
+        # This loop executes only in the '/files/download/queued' scenario
+        # Because the files will not be available after the GET request
+        while len(os.listdir(DOWNLOAD_TEST_FOLDER)) != len(TEST_FILES_NAMES):
+            duration = time.time() - start_time
+            if duration > BaseLoader.DOWNLOAD_TIME * len(TEST_FILES_NAMES):
+                assert False, "Duration for queued downloader needs to be smaller than the sequential one."
+            await asyncio.sleep(1.0)
+
+        if url_base == '/files/download/queued':
+            # We expect the duration to be between the direct division and the rounding
+            # We add to the max 1 second due to the processing time of the queue
+            interval = {
+                'min': BaseLoader.DOWNLOAD_TIME * (len(TEST_FILES_NAMES) / Handler.NUMBER_OF_QUE_LOADERS),
+                'max': BaseLoader.DOWNLOAD_TIME *
+                       (math.ceil(len(TEST_FILES_NAMES) / Handler.NUMBER_OF_QUE_LOADERS) + 1) + 1
+            }
+            assert interval['min'] < duration < interval['max'] + 1.0
+
+        # After the files have been downloaded we compare the contents
+        for file_name in os.listdir(DOWNLOAD_TEST_FOLDER):
+            assert file_name in TEST_FILES_NAMES
+            file_path = os.path.join(DOWNLOAD_TEST_FOLDER, file_name)
+            content = TEST_FILES_CONTENTS[TEST_FILES_NAMES.index(file_name)]
+            with open(file_path, 'rb') as fh:
+                assert content == fh.read().decode('utf-8')
+
         logger.info('Test success')
 
     async def test_get_files(self, client, prepare_data, auth_header):
