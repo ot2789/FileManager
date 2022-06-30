@@ -22,6 +22,7 @@ import functools
 import itertools
 from contextlib import asynccontextmanager
 from server.file_loader import BaseLoader
+import pytest_aiohttp
 
 # Logging will present extra information when running pytest
 logger = logging.getLogger(__name__)
