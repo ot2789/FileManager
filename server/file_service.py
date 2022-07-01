@@ -75,6 +75,10 @@ class FileService(metaclass=utils.SingletonMeta):
 
         if security_level == 'low':
             cipher = BaseCipher()
+        elif security_level == 'medium':
+            cipher = AESCipher(self.path)
+        elif security_level == 'high':
+            cipher = RSACipher(self.path, user_id)
         else:
             raise ValueError('Security level is invalid')
 
@@ -164,6 +168,10 @@ class FileService(metaclass=utils.SingletonMeta):
 
         if security_level == 'low':
             cipher = BaseCipher()
+        elif security_level == 'medium':
+            cipher = AESCipher(self.path)
+        elif security_level == 'high':
+            cipher = RSACipher(self.path, user_id)
         else:
             raise ValueError('Security level is invalid')
 
@@ -221,7 +229,7 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        for extension in (self.EXTENSION, 'md5'):
+        for extension in (self.EXTENSION, 'md5', 'bin'):
             basename = f'{filename}.{extension}'
             file_path = os.path.join(self.path, basename)
 
@@ -263,7 +271,7 @@ class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):
 
         """
 
-        result = super().get_file_data(filename)
+        result = super().get_file_data(filename, user_id)
         result_for_check = dict(result)
         result_for_check.pop('edit_date')
 
@@ -328,7 +336,7 @@ class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):
 
         """
 
-        result = super().create_file(content, security_level)
+        result = super().create_file(content, security_level, user_id)
         signature = HashAPI.hash_md5('_'.join(list(str(x) for x in list(result.values()))))
         basename = result['name'].split('.')[0]
         sig_basename = f'{basename}.md5'

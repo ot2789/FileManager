@@ -107,7 +107,8 @@ class AESCipher(BaseCipher):
     """
 
     def __init__(self, file_folder: str):
-        pass
+        super().__init__()
+        self.file_folder = file_folder
 
     def encrypt(self, data: bytes) -> Tuple[bytes, bytes, bytes, bytes]:
         """Encrypt data.
@@ -120,7 +121,10 @@ class AESCipher(BaseCipher):
 
         """
 
-        pass
+        session_key = get_random_bytes(16)
+        cipher_aes = AES.new(session_key, AES.MODE_EAX)
+        cipher_text, tag = cipher_aes.encrypt_and_digest(data)
+        return cipher_text, tag, cipher_aes.nonce, session_key
 
     def decrypt(self, input_file: BinaryIO, filename: str) -> bytes:
         """Decrypt data.
@@ -134,7 +138,10 @@ class AESCipher(BaseCipher):
 
         """
 
-        pass
+        nonce, tag, cipher_text = [input_file.read(x) for x in (16, 16, -1)]
+        session_key_file = os.path.join(self.file_folder, f'{filename}.bin')
+        session_key = open(session_key_file, 'rb').read()
+        return self.decrypt_aes_data(cipher_text, tag, nonce, session_key)
 
     @staticmethod
     def decrypt_aes_data(cipher_text: bytes, tag: bytes, nonce: bytes, session_key: bytes) -> bytes:
@@ -151,7 +158,9 @@ class AESCipher(BaseCipher):
 
         """
 
-        pass
+        cipher_aes = AES.new(session_key, AES.MODE_EAX, nonce)
+        data = cipher_aes.decrypt_and_verify(cipher_text, tag)
+        return data
 
     def write_cipher_text(self, data: bytes, out_file: BinaryIO, filename: str):
         """Encrypt data and write cipher text into output file.
@@ -163,16 +172,43 @@ class AESCipher(BaseCipher):
 
         """
 
-        pass
+        cipher_text, tag, nonce, session_key = self.encrypt(data)
+        session_key_file = os.path.join(self.file_folder, f'{filename}.bin')
+
+        if not os.path.exists(session_key_file):
+            with open(session_key_file, 'wb') as f:
+                f.write(session_key)
+
+        out_file.write(nonce)
+        out_file.write(tag)
+        out_file.write(cipher_text)
 
 
 class RSACipher(AESCipher):
     """RSA cipher class.
 
     """
+    CODE = os.environ['CRYPTO_CODE']
+    KEY_PROTECTION = 'scryptAndAES128-CBC'
 
     def __init__(self, file_folder: str, user_id: int):
-        pass
+        super().__init__(file_folder)
+        if user_id is None:
+            raise ValueError("User id needs to be specified for key separation!")
+        self.user_id = user_id
+
+        key = RSA.generate(2048)
+        encrypted_key = key.export_key(passphrase=self.CODE, pkcs=8, protection=self.KEY_PROTECTION)
+
+        self.private_key_file = os.path.join(KEY_FOLDER, f'private_rsa_{self.user_id}.bin')
+        self.public_key_file = os.path.join(KEY_FOLDER, f'public_rsa_{self.user_id}.bin')
+
+        if not os.path.exists(self.private_key_file) or not os.path.exists(self.public_key_file):
+            with open(self.private_key_file, 'wb') as f:
+                f.write(encrypted_key)
+
+            with open(self.public_key_file, 'wb') as f:
+                f.write(key.publickey().exportKey())
 
     def encrypt(self, data: bytes) -> Tuple[bytes, bytes, bytes, bytes]:
         """Encrypt data.
@@ -185,7 +221,13 @@ class RSACipher(AESCipher):
 
         """
 
-        pass
+        cipher_text, tag, nonce, session_key = super().encrypt(data)
+
+        public_key = RSA.import_key(open(self.public_key_file, 'rb').read())
+        cipher_rsa = PKCS1_OAEP.new(public_key)
+        enc_session_key = cipher_rsa.encrypt(session_key)
+
+        return cipher_text, tag, nonce, enc_session_key
 
     def decrypt(self, input_file: BinaryIO, filename: str) -> bytes:
         """Decrypt data.
@@ -199,7 +241,14 @@ class RSACipher(AESCipher):
 
         """
 
-        pass
+        private_key = RSA.import_key(open(self.private_key_file).read(), passphrase=self.CODE)
+        nonce, tag, cipher_text = [input_file.read(x) for x in (16, 16, -1)]
+        cipher_rsa = PKCS1_OAEP.new(private_key)
+        session_key_file = os.path.join(self.file_folder, f'{filename}.bin')
+        enc_session_key = open(session_key_file, 'rb').read()
+        session_key = cipher_rsa.decrypt(enc_session_key)
+
+        return self.decrypt_aes_data(cipher_text, tag, nonce, session_key)
 
     def write_cipher_text(self, data: bytes, out_file: BinaryIO, filename: str):
         """Encrypt data and write cipher text into output file.
@@ -211,4 +260,13 @@ class RSACipher(AESCipher):
 
         """
 
-        pass
+        cipher_text, tag, nonce, session_key = self.encrypt(data)
+        session_key_file = os.path.join(self.file_folder, f'{filename}.bin')
+
+        if not os.path.exists(session_key_file):
+            with open(session_key_file, 'wb') as f:
+                f.write(session_key)
+
+        out_file.write(nonce)
+        out_file.write(tag)
+        out_file.write(cipher_text)

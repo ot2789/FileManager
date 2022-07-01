@@ -55,7 +55,7 @@ def get_file_data():
     if check_sig == 'y':
         file_service = FileServiceSigned()
 
-    data = file_service.get_file_data(filename)
+    data = file_service.get_file_data(filename, 1)
 
     return data
 
@@ -90,7 +90,7 @@ def create_file():
     if create_sig == 'y':
         file_service = FileServiceSigned()
 
-    data = file_service.create_file(content, security_level)
+    data = file_service.create_file(content, security_level, 1)
 
     return data
 
