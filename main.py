@@ -9,7 +9,7 @@ import json
 from aiohttp import web
 import server.config
 from server.handler import Handler
-# from server.database import DataBase
+from server.database import DataBase
 import server.file_service_no_class as FileServiceNoClass
 from server.file_service import FileService, FileServiceSigned
 
@@ -28,6 +28,9 @@ def commandline_parser():
     )
     parser.add_argument(
         '-p', '--port', default='8080', help='port (default: 8080)'
+    )
+    parser.add_argument(
+        '-i', '--init', action='store_true', default=0, help='Erase and initialize database'
     )
     return parser
 
@@ -216,6 +219,10 @@ def main():
     path = namespace.folder
     FileService(path=path)
     FileServiceSigned(path=path)
+    db = DataBase()
+
+    if namespace.init:
+        db.init_system()
 
     handler = Handler(namespace.folder)
     app = web.Application()
@@ -226,6 +233,9 @@ def main():
         web.post('/files', handler.create_file),
         web.delete('/files/{filename}', handler.delete_file),
         web.post('/change_file_dir', handler.change_file_dir),
+        web.post('/signup', handler.signup),
+        web.post('/signin', handler.signin),
+        web.get('/logout', handler.logout),
     ])
     logging.basicConfig(level=logging.INFO)
     web.run_app(app, port=namespace.port)

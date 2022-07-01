@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import server.config
 from aiohttp import web, ClientResponse
 from server.handler import Handler
-# from server.database import DataBase
+from server.database import DataBase
 from server.crypto import HashAPI, AESCipher, RSACipher
 from server.file_service import FileService, FileServiceSigned
 import functools
@@ -30,6 +30,12 @@ TEST_FILES_SIGNED = [False, False, True, True]
 TEST_FILES_NAMES = [f'{f}_{s}.{EXTENSION_TXT}' for f, s in zip(TEST_FILES_PART_NAME, TEST_FILES_SECURITY)]
 TEST_FILES_CONTENTS = ['lmao', 'test1', 'test2', 'ABC']
 TEST_FILE_NO_EXIST = "notExist_low.txt"
+TEST_USER = {
+    'email': 'test@fileman.com',
+    'password': '1234qwer',
+    'name': 'Test',
+    'surname': 'Master',
+}
 
 
 def create_and_move_to_test_folder():
@@ -74,6 +80,10 @@ def create_test_files():
                 data = bytes(sig, 'utf-8')
                 file_handler.write(data)
 
+@pytest.fixture(scope="class")
+def erase_db():
+    db = DataBase()
+    db.init_system()
 
 @pytest.fixture
 def client(loop, aiohttp_client):
@@ -86,9 +96,25 @@ def client(loop, aiohttp_client):
         web.post('/files', handler.create_file),
         web.delete('/files/{filename}', handler.delete_file),
         web.post('/change_file_dir', handler.change_file_dir),
+        web.post('/signup', handler.signup),
+        web.post('/signin', handler.signin),
+        web.get('/logout', handler.logout),
     ])
 
     return loop.run_until_complete(aiohttp_client(app))
+
+
+def confirm_password(user):
+    user = dict(user)
+    user['confirm_password'] = user['password']
+    return user
+
+
+def signin_info(user):
+    user = dict(user)
+    user.pop('name')
+    user.pop('surname')
+    return user
 
 
 def cleanup():
@@ -110,6 +136,21 @@ def prepare_data(request):
     yield
     cleanup()
 
+@pytest.fixture(scope='function')
+async def auth_header(client):
+    loc_signup = '/signup'
+    loc_signin = '/signin'
+    loc_logout = '/logout'
+    # This can fail!
+    await client.post(loc_signup, json=confirm_password(TEST_USER))
+
+    resp = await client.post(loc_signin, json=signin_info(TEST_USER))
+    result = await check_response(resp, 200, 'success')
+    header = {'Authorization': result['session_id']}
+    yield header
+    resp = await client.get(loc_logout, headers=header)
+    await check_response(resp, 200, 'success')
+
 
 async def check_response(resp: ClientResponse, code: int, json_status: str = None):
     assert resp.status == code
@@ -123,6 +164,7 @@ async def check_response(resp: ClientResponse, code: int, json_status: str = Non
     return result
 
 
+@pytest.mark.usefixtures("erase_db")
 class TestSuite:
     async def test_connection(self, client):
         location = '/'
@@ -136,11 +178,90 @@ class TestSuite:
         result = await check_response(resp, 200, 'success')
         logger.info('Test success')
 
-    async def test_get_files(self, client, prepare_data):
+    async def test_user(self, client, prepare_data):
+        loc_signup = '/signup'
+        loc_signin = '/signin'
+        loc_logout = '/logout'
+        loc_access = '/files/list'
+
+        db = DataBase()
+        db_session = DataBase().create_session()
+
+        logger.info(f'Test sign-up')
+        resp = await client.post(loc_signup, json=TEST_USER)
+        await check_response(resp, 400, 'error')
+        resp = await client.post(loc_signup, json=confirm_password(TEST_USER))
+        await check_response(resp, 200, 'success')
+        resp = await client.post(loc_signup, json=confirm_password(TEST_USER))
+        await check_response(resp, 400, 'error')
+        db_user = db_session.query(db.User).filter_by(email=TEST_USER['email']).first()
+        assert db_user, 'User must be found in database'
+
+        logger.info(f'Test sign-in - user session')
+        resp = await client.post(loc_signin, json=signin_info(TEST_USER))
+        result = await check_response(resp, 200, 'success')
+        session_id = result.get('session_id')
+        assert len(db_user.sessions) == 1, 'User must have one session'
+        assert session_id == db_user.sessions[0].uuid, 'Session uuid that was given through rest must match the ' \
+                                                       'database'
+
+        logger.info(f'Test login - use session')
+        resp = await client.get(loc_access)
+        await check_response(resp, 401, None)
+        resp = await client.get(loc_access, headers={'Authorization': session_id})
+        result = await check_response(resp, 200, 'success')
+        assert len(result.get('data')) == len(TEST_FILES_PART_NAME)
+        resp = await client.get(loc_access)
+        await check_response(resp, 401, None)
+
+        logger.info(f'Test login - session expiration')
+        # Make the session expire
+        db_user_session = db_session.query(db.Session).filter_by(user_id=db_user.id).first()
+        # Session should expire in 1 hours from creation
+        assert db_user_session.exp_dt - db_user_session.create_dt == \
+               timedelta(hours=int(os.environ['SESSION_DURATION_HOURS']))
+        db_user_session.exp_dt = db_user_session.create_dt
+        db_session.commit()
+        resp = await client.get(loc_access, headers={'Authorization': session_id})
+        await check_response(resp, 401, None)
+        db_session.close()
+        db_session = DataBase().create_session()
+        db_user = db_session.query(db.User).filter_by(email=TEST_USER['email']).first()
+        assert len(db_user.sessions) == 0, 'Session must be removed when it has expired'
+
+        logger.info(f'Test login - session logout')
+        resp = await client.post(loc_signin, json=signin_info(TEST_USER))
+        result = await check_response(resp, 200, 'success')
+        session_id2 = result.get('session_id')
+        db_session.close()
+        db_session = DataBase().create_session()
+        db_user = db_session.query(db.User).filter_by(email=TEST_USER['email']).first()
+        assert session_id2 != session_id, "A new session must be created after expiration"
+        assert len(db_user.sessions) == 1, 'User must have one session'
+        assert session_id2 == db_user.sessions[0].uuid, 'Session uuid that was given through rest must match the ' \
+                                                       'database'
+
+        resp = await client.get(loc_access, headers={'Authorization': session_id})
+        await check_response(resp, 401, None)
+        resp = await client.get(loc_access, headers={'Authorization': session_id2})
+        await check_response(resp, 200, 'success')
+
+        resp = await client.get(loc_logout, headers={'Authorization': session_id2})
+        await check_response(resp, 200, 'success')
+        db_session.close()
+        db_session = DataBase().create_session()
+        db_user = db_session.query(db.User).filter_by(email=TEST_USER['email']).first()
+        assert len(db_user.sessions) == 0, 'Session must be removed when user logged out'
+        resp = await client.get(loc_access, headers={'Authorization': session_id2})
+        await check_response(resp, 401, None)
+        db_session.close()
+        logger.info('Test success')
+
+    async def test_get_files(self, client, prepare_data, auth_header):
         location = '/files/list'
 
         logger.info(f'Test GET "{location}" - Get files')
-        resp = await client.get(location)
+        resp = await client.get(location, headers=auth_header)
         result = await check_response(resp, 200, 'success')
 
         assert len(result.get('data')) == len(TEST_FILES_PART_NAME)
@@ -150,7 +271,7 @@ class TestSuite:
 
         logger.info('Test success')
 
-    async def test_get_file_info(self, client, prepare_data):
+    async def test_get_file_info(self, client, prepare_data, auth_header):
         format_location = '/files?filename={}&is_signed={}&user_id={}'
 
         for file_name, security, sign, content in \
@@ -161,12 +282,12 @@ class TestSuite:
                 'true' if sign else 'false',
                 TEST_USER_ID)
             logger.info(f'Test GET "{location}" - Get file info')
-            resp = await client.get(location)
+            resp = await client.get(location, headers=auth_header)
             result = await check_response(resp, 200, 'success')
             assert result.get('data').get('content') == content
             logger.info('Test success')
 
-    async def test_create_delete_file(self, client, prepare_data):
+    async def test_create_delete_file(self, client, prepare_data, auth_header):
         location = "/files"
         data = {
             'content': "blabla",
@@ -176,20 +297,20 @@ class TestSuite:
         }
 
         logger.info(f'Test POST "{location}"')
-        resp = await client.post('/files', json=data)
+        resp = await client.post('/files', json=data, headers=auth_header)
         result = await check_response(resp, 200, 'success')
         assert result.get('data').get('content') == data['content']
         name = result.get('data').get('name').replace('.' + EXTENSION_TXT, '')
 
-        resp = await client.get('/files/list')
+        resp = await client.get('/files/list', headers=auth_header)
         result = await check_response(resp, 200, 'success')
 
         assert len(result.get('data')) == len(TEST_FILES_PART_NAME) + 1
 
-        resp = await client.delete(f'/files/{name}')
+        resp = await client.delete(f'/files/{name}', headers=auth_header)
         result = await check_response(resp, 200, 'success')
 
-        resp = await client.get('/files/list')
+        resp = await client.get('/files/list', headers=auth_header)
         result = await check_response(resp, 200, 'success')
 
         assert len(result.get('data')) == len(TEST_FILES_PART_NAME)
@@ -217,8 +338,7 @@ class TestSuite:
                 await check_response(resp, 405)
             logger.info('Test success')
 
-
-    async def test_neg_get_file_info_missing_fields(self, client, prepare_data):
+    async def test_neg_get_file_info_missing_fields(self, client, prepare_data, auth_header):
         general_location = '/files?'
         location_parts = ('filename', 'is_signed', 'user_id')
 
@@ -238,7 +358,7 @@ class TestSuite:
                 )
 
                 logger.info(f'Test GET "{location}" - Get file info incomplete')
-                resp = await client.get(location)
+                resp = await client.get(location, headers=auth_header)
                 if 'is_signed' not in format_location:
                     await check_response(resp, 400, 'error')
                 else:
@@ -253,7 +373,7 @@ class TestSuite:
 
                 logger.info('Test success')
 
-    async def test_neg_get_file_info_incorrect_names(self, client, prepare_data):
+    async def test_neg_get_file_info_incorrect_names(self, client, prepare_data, auth_header):
         format_location = '/files?filename={}&is_signed={}&user_id={}'
 
         for alter_var in ('sign', 'security',):
@@ -280,6 +400,6 @@ class TestSuite:
                     'true' if sign else 'false',
                     TEST_USER_ID)
                 logger.info(f'Test GET "{location}" - Get file info incorrect request for "{alter_var}"')
-                resp = await client.get(location)
+                resp = await client.get(location, headers=auth_header)
                 await check_response(resp, 400, 'error')
                 logger.info('Test success')

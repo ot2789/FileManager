@@ -20,10 +20,20 @@ class DataBase(metaclass=SingletonMeta):
 
     """
 
+    __is_inited = False
+    __instance = None
+    __db_string = "postgresql://{}:{}@{}/{}".format(
+        os.environ['DB_USER'],
+        os.environ['DB_PASSWORD'],
+        os.environ['DB_HOST'],
+        os.environ['DB_NAME'])
     Base = declarative_base()
 
     def __init__(self):
-        pass
+        if not self.__is_inited:
+            self.__engine = create_engine(self.__db_string, pool_size=10, max_overflow=20)
+            self.Base.metadata.create_all(bind=self.__engine)
+            self.__is_inited = True
 
     class BaseModel:
         """Base database model.
@@ -32,18 +42,35 @@ class DataBase(metaclass=SingletonMeta):
 
         @declared_attr
         def __tablename__(self):
-            pass
+            return self.__name__
+
+        id = Column(Integer, name='Id', primary_key=True, autoincrement=True)
+        create_dt = Column(DateTime, name='Create Date')
 
         def __init__(self):
-            pass
+            self.create_dt = datetime.now()
 
     class User(BaseModel, Base):
         """User model.
 
         """
 
-        def __init__(self, email: str, password: str, name: str, surname: str = None, role=None, sessions: list = None):
-            pass
+        email = Column(String, name='Email', unique=True)
+        password = Column(String, name='Password')
+        name = Column(String, name='Name')
+        surname = Column(String, name="Surname")
+        last_login_dt = Column(DateTime, name="Last Login Date")
+        sessions = relationship('Session', back_populates='user', cascade='all, delete-orphan')
+
+        def __init__(self, email: str, password: str, name: str, surname: str = None, sessions: list = None, role=None):
+            super().__init__()
+            self.email = email
+            self.password = password
+            self.name = name
+            self.surname = surname
+
+            if sessions:
+                self.sessions.extend(sessions)
 
     class Role(BaseModel, Base):
         """Role model.
@@ -66,13 +93,25 @@ class DataBase(metaclass=SingletonMeta):
 
         """
 
-        def __init__(self, user=None):
-            pass
+        uuid = Column(String, name='UUID', unique=True)
+        exp_dt = Column(DateTime, name='Expiration Date')
+        user_id = Column(Integer, ForeignKey('User.Id', ondelete='CASCADE', onupdate='CASCADE'))
+        user = relationship('User', back_populates='sessions')
+
+        def __init__(self, user):
+            super().__init__()
+            self.uuid = str(uuid4())
+            self.exp_dt = self.create_dt + timedelta(hours=int(os.environ['SESSION_DURATION_HOURS']))
+            self.user = user
+            self.user.last_login_dt = self.create_dt
 
     class MethodRole(Base):
         """Many to many model for method and role models.
 
         """
+        # We create a dummy id here so that the sqlalchemy can create the table
+        # We will remove this later.
+        dummy_id = Column(Integer, name='Id', primary_key=True, autoincrement=True)
 
         __tablename__ = 'MethodRole'
 
@@ -88,7 +127,7 @@ class DataBase(metaclass=SingletonMeta):
 
         """
 
-        pass
+        return self.__engine
 
     def create_session(self) -> DBSession:
         """Create and get database connection session.
@@ -98,11 +137,12 @@ class DataBase(metaclass=SingletonMeta):
 
         """
 
-        pass
+        return sessionmaker(bind=self.__engine)()
 
     def init_system(self):
         """Initialize database.
 
         """
 
-        pass
+        self.Base.metadata.drop_all(bind=self.__engine)
+        self.Base.metadata.create_all(bind=self.__engine)
