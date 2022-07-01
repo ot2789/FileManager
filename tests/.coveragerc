@@ -1,0 +1,3 @@
+
+[run]
+omit = *file_service_no_class.py

@@ -1,0 +1,7 @@
+
+*.lnk
+.idea
+*.pyc
+keys
+storage
+tests/.coverage
