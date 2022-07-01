@@ -100,11 +100,15 @@ class Handler:
                 'status': 'error',
                 'message': str(err)
             }))
-
         except KeyError as err:
             raise web.HTTPBadRequest(text=json.dumps({
                 'status': 'error',
                 'message': 'Parameter {} is not set'.format(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
             }))
 
     @UsersAPI.authorized
@@ -159,6 +163,11 @@ class Handler:
                 'status': 'error',
                 'message': str(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
 
     @UsersAPI.authorized
@@ -187,6 +196,11 @@ class Handler:
 
         except AssertionError as err:
             raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
                 'status': 'error',
                 'message': str(err)
             }))
@@ -232,6 +246,11 @@ class Handler:
                 'status': 'error',
                 'message': 'Parameter {} is not set'.format(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
     @RoleModel.role_model
@@ -275,6 +294,11 @@ class Handler:
                 'status': 'error',
                 'message': 'Parameter {} is not set'.format(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     async def signup(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for signing up user.
@@ -317,6 +341,11 @@ class Handler:
                 'status': 'error',
                 'message': str(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     async def signin(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for signing in user.
@@ -354,6 +383,11 @@ class Handler:
 
         except (AssertionError, ValueError) as err:
             raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
                 'status': 'error',
                 'message': str(err)
             }))
@@ -403,10 +437,16 @@ class Handler:
 
         """
 
-        return web.json_response(data={
-            'status': 'success',
-            'data': RoleModel.get_users(),
-        })
+        try:
+            return web.json_response(data={
+                'status': 'success',
+                'data': RoleModel.get_users(),
+            })
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
     @RoleModel.role_model
@@ -424,10 +464,16 @@ class Handler:
 
         """
 
-        return web.json_response(data={
-            'status': 'success',
-            'data': RoleModel.get_roles(),
-        })
+        try:
+            return web.json_response(data={
+                'status': 'success',
+                'data': RoleModel.get_roles(),
+            })
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
     @RoleModel.role_model
@@ -456,6 +502,11 @@ class Handler:
 
         except AssertionError as err:
             raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
                 'status': 'error',
                 'message': str(err)
             }))
@@ -490,6 +541,11 @@ class Handler:
                 'status': 'error',
                 'message': str(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
     @RoleModel.role_model
@@ -521,6 +577,11 @@ class Handler:
                 'status': 'error',
                 'message': str(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
     @RoleModel.role_model
@@ -549,6 +610,11 @@ class Handler:
 
         except AssertionError as err:
             raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
                 'status': 'error',
                 'message': str(err)
             }))
@@ -590,6 +656,11 @@ class Handler:
 
         except (AssertionError, ValueError) as err:
             raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
                 'status': 'error',
                 'message': str(err)
             }))
@@ -635,6 +706,11 @@ class Handler:
                 'status': 'error',
                 'message': str(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
     @RoleModel.role_model
@@ -674,6 +750,11 @@ class Handler:
 
         except (AssertionError, ValueError) as err:
             raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
                 'status': 'error',
                 'message': str(err)
             }))
@@ -719,6 +800,11 @@ class Handler:
                 'status': 'error',
                 'message': str(err)
             }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
     @RoleModel.role_model
@@ -759,6 +845,11 @@ class Handler:
 
         except (AssertionError, ValueError) as err:
             raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+        except Exception as err:
+            raise web.HTTPInternalServerError(text=json.dumps({
                 'status': 'error',
                 'message': str(err)
             }))

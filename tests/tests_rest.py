@@ -12,6 +12,7 @@ import asyncio
 import server.utils as utils
 from datetime import datetime, timedelta
 import server.config
+import copy
 from aiohttp import web, ClientResponse
 from server.handler import Handler
 from server.database import DataBase
@@ -19,6 +20,7 @@ from server.crypto import HashAPI, AESCipher, RSACipher
 from server.file_service import FileService, FileServiceSigned
 import functools
 import itertools
+from contextlib import asynccontextmanager
 from server.file_loader import BaseLoader
 
 # Logging will present extra information when running pytest
@@ -40,6 +42,19 @@ TEST_USER = {
     'password': '1234qwer',
     'name': 'Test',
     'surname': 'Master',
+    'role': 'trusted'
+}
+TEST_USER2 = {
+    'email': 'test2@fileman.com',
+    'password': '12qwer34',
+    'name': 'Starting',
+    'surname': 'Junior',
+    'role': 'visitor'
+}
+ADMIN_USER = {
+    'email': os.environ['ADMIN_EMAIL'],
+    'password': os.environ['ADMIN_PASSWORD'],
+    'role': 'admin'
 }
 
 
@@ -140,8 +155,10 @@ def confirm_password(user):
 
 def signin_info(user):
     user = dict(user)
-    user.pop('name')
-    user.pop('surname')
+    for remove in ('role', 'name', 'surname',):
+        if remove not in user:
+            continue
+        user.pop(remove)
     return user
 
 
@@ -166,20 +183,30 @@ def prepare_data(request):
     cleanup(DOWNLOAD_TEST_FOLDER)
 
 
-@pytest.fixture(scope='function')
-async def auth_header(client):
-    loc_signup = '/signup'
+@asynccontextmanager
+async def rest_session(client, user):
     loc_signin = '/signin'
     loc_logout = '/logout'
-    # This can fail!
-    await client.post(loc_signup, json=confirm_password(TEST_USER))
-
-    resp = await client.post(loc_signin, json=signin_info(TEST_USER))
+    resp = await client.post(loc_signin, json=signin_info(user))
     result = await check_response(resp, 200, 'success')
     header = {'Authorization': result['session_id']}
     yield header
     resp = await client.get(loc_logout, headers=header)
     await check_response(resp, 200, 'success')
+
+
+@pytest.fixture(scope='function')
+async def create_users(client):
+    loc_signup = '/signup'
+    # This can fail, not an issue!
+    await client.post(loc_signup, json=confirm_password(TEST_USER))
+    await client.post(loc_signup, json=confirm_password(TEST_USER2))
+
+
+@pytest.fixture(scope='function')
+async def auth_header(client, create_users):
+    async with rest_session(client, ADMIN_USER) as header:
+        yield header
 
 
 async def check_response(resp: ClientResponse, code: int, json_status: str = None):
@@ -285,6 +312,218 @@ class TestSuite:
         resp = await client.get(loc_access, headers={'Authorization': session_id2})
         await check_response(resp, 401, None)
         db_session.close()
+        logger.info('Test success')
+
+    async def test_role_model(self, client, prepare_data, create_users):
+        # We use the auth_header just to create the users in case this is run directly
+        loc = {
+            'users': '/users',                                      # get
+            'roles': '/roles',                                      # get
+            'add_method': '/method/{name}',                         # put
+            'delete_method': '/method/{name}',                      # delete
+            'add_role': '/role/{name}',                             # put
+            'delete_role': '/role/{name}',                          # delete
+            'add_method_to_role': '/add_method_to_role',            # post
+            'delete_method_from_role': '/delete_method_from_role',  # post
+            'change_shared_prop': '/change_shared_prop',            # post
+            'change_user_role': '/change_user_role',                # post
+            'get_files': '/files/list'                              # get
+        }
+        test_map = {
+            'visitor': {'get_files', 'get_file_info', 'get_file_info_signed'},
+            'trusted': {'get_file_info', 'get_file_info_signed', 'create_file', 'delete_file', 'get_files'},
+            'admin': {'get_file_info_signed', 'create_file', 'delete_file', 'users', 'roles', 'add_method',
+                      'delete_method', 'add_role', 'delete_role', 'add_method_to_role', 'delete_method_from_role',
+                      'change_shared_prop', 'change_user_role', 'change_file_dir', 'get_file_info', 'get_files'}
+        }
+        role_map = {}
+        users = [copy.deepcopy(TEST_USER), copy.deepcopy(TEST_USER2), copy.deepcopy(ADMIN_USER)]
+
+        def get_roles_from_db():
+            nonlocal role_map
+            role_map = {}
+            db = DataBase()
+            db_session = db.create_session()
+            roles = db_session.query(DataBase.Role).all()
+
+            for r in roles:
+                role_map[r.name] = set()
+                for mr in r.methods:
+                    role_map[r.name].add(mr.method.name)
+            db_session.close()
+
+        def get_unique_user(**kwargs):
+            nonlocal users
+            out = []
+            for u in users:
+                for k, v in kwargs.items():
+                    if u[k] != v:
+                        break
+                else:
+                    out.append(u)
+            assert len(out) == 1
+            return out[0]
+
+        async def check_role_access(response, location, user_role):
+            nonlocal role_map
+            if location in role_map[user_role]:
+                return await check_response(response, 200, 'success')
+            else:
+                await check_response(response, 403, 'error')
+                return {}
+
+        async def check_permits_none():
+            nonlocal users
+            nonlocal client
+            for user in users:
+                async with rest_session(client, user) as header:
+                    resp = await client.get(loc['users'], headers=header)
+                    await check_response(resp, 403, 'error')
+
+        async def check_permits_all():
+            nonlocal users
+            nonlocal client
+            for user in users:
+                async with rest_session(client, user) as header:
+                    resp = await client.get(loc['users'], headers=header)
+                    await check_response(resp, 200, 'success')
+
+        async def check_permits_role():
+            nonlocal users
+            nonlocal client
+            for user in users:
+                async with rest_session(client, user) as header:
+                    resp = await client.get(loc['users'], headers=header)
+                    await check_role_access(resp, 'users', user['role'])
+
+        async def rest_call(location, method, user, format_uri=None, **kwargs):
+            nonlocal loc
+            nonlocal client
+            uri = loc[location]
+            if format_uri:
+                uri = uri.format(**format_uri)
+            async with rest_session(client, user) as header:
+                meth_call = getattr(client, method)
+                resp = await meth_call(uri, headers=header, **kwargs)
+                data = await check_role_access(resp, location, user['role'])
+            return data
+
+        get_roles_from_db()
+        assert role_map == test_map
+
+        logging.info("Test role model - Assigning user roles")
+        data = None
+
+        temp = await rest_call('users', 'get', ADMIN_USER)
+        # We use the or here to keep the data in case the output of the function is empty dictionary
+        data = temp.get('data')
+        for email, role in data.items():
+            ref_role = get_unique_user(email=email)['role']
+            # Initially created users are visitors, we will change it in the following code
+            if ref_role != 'admin':
+                ref_role = 'visitor'
+            assert ref_role == role
+
+        for user in users:
+            # Only update the users roles that require it
+            if get_unique_user(email=user['email'])['role'] == data[user['email']]:
+                continue
+            await rest_call('change_user_role', 'post', ADMIN_USER, json={'email': user['email'], 'role': user['role']})
+
+        temp = await rest_call('users', 'get', ADMIN_USER)
+        # We use the or here to keep the data in case the output of the function is empty dictionary
+        data = temp.get('data')
+        assert len(data) == len(users)
+        for email, role in data.items():
+            assert get_unique_user(email=email)['role'] == role
+
+        logging.info("Test role model - making method shared to other users.")
+        # We make the users method shared, meaning all users should be able to access it
+        await rest_call('change_shared_prop', 'post', ADMIN_USER, json={'method': 'users', 'value': True})
+        await check_permits_all()
+        await rest_call('change_shared_prop', 'post', ADMIN_USER, json={'method': 'users', 'value': False})
+        await check_permits_role()
+
+        logging.info("Test role model - Removing method entirely from check.")
+        await rest_call('delete_method', 'delete', ADMIN_USER, format_uri=dict(name='users'))
+        get_roles_from_db()
+        assert role_map != test_map
+        # When the method does not exist in role model all the users that are logged in should be able to use it
+        await check_permits_all()
+
+        logging.info("Test role model - Redo the database by recreating method and re-adding the roles.")
+        await rest_call('add_method', 'put', ADMIN_USER, format_uri=dict(name='users'))
+
+        for r in ('admin',):
+            await rest_call('add_method_to_role', 'post', ADMIN_USER, json={'method': 'users', 'role': r})
+        get_roles_from_db()
+        assert role_map == test_map
+
+        logging.info("Test role model - Add and remove methods from roles, none should be able to access.")
+        for r in ('admin',):
+            await rest_call('delete_method_from_role', 'post', ADMIN_USER, json={'method': 'users', 'role': r})
+        await check_permits_none()
+
+        for r in test_map.keys():
+            await rest_call('add_method_to_role', 'post', ADMIN_USER, json={'method': 'users', 'role': r})
+
+        get_roles_from_db()
+        assert role_map != test_map
+        await check_permits_all()
+
+        logging.info("Test role model - Remove the users from the method that should not be there.")
+        for r in test_map.keys():
+            if r == 'admin':
+                continue
+            await rest_call('delete_method_from_role', 'post', ADMIN_USER, json={'method': 'users', 'role': r})
+
+        get_roles_from_db()
+        assert role_map == test_map
+        await check_permits_role()
+
+        logging.info("Test role model - Create a new role entirely and assign it to a user")
+        new_role = 'debugger'
+
+        await rest_call('add_role', 'put', ADMIN_USER, format_uri=dict(name=new_role))
+        for m in test_map['trusted']:
+            await rest_call('add_method_to_role', 'post', ADMIN_USER, json={'method': m, 'role': new_role})
+
+        get_roles_from_db()
+        assert role_map['trusted'] == role_map['debugger']
+        await check_permits_role()
+
+        await rest_call('add_method_to_role', 'post', ADMIN_USER, json={'method': 'users', 'role': new_role})
+        await rest_call('change_user_role', 'post', ADMIN_USER, json={'email': TEST_USER['email'], 'role': new_role})
+
+        get_unique_user(email=TEST_USER['email'])['role'] = new_role
+        get_roles_from_db()
+        await check_permits_role()
+
+        temp = await rest_call('users', 'get', get_unique_user(email=TEST_USER['email']))
+        # We use the or here to keep the data in case the output of the function is empty dictionary
+        data = temp.get('data')
+        for email, role in data.items():
+            ref_role = get_unique_user(email=email)['role']
+            assert ref_role == role
+
+        logging.info("Test role model - Check that the list of roles from REST is okay.")
+        temp = await rest_call('roles', 'get', ADMIN_USER)
+        # We use the or here to keep the data in case the output of the function is empty dictionary
+        data = temp.get('data')
+        for k in data:
+            data[k] = set(data[k])
+
+        assert role_map == data
+
+        logging.info("Test role model - Remove newly created role and restore the database to initial setting")
+        await rest_call('change_user_role', 'post', ADMIN_USER,
+                        json={'email': TEST_USER['email'], 'role': TEST_USER['role']})
+        get_unique_user(email=TEST_USER['email'])['role'] = TEST_USER['role']
+        await rest_call('delete_role', 'delete', ADMIN_USER, format_uri=dict(name=new_role))
+
+        get_roles_from_db()
+        await check_permits_role()
+        assert role_map == test_map
         logger.info('Test success')
 
     @pytest.mark.parametrize("url_base", ('/files/download', '/files/download/queued',))
