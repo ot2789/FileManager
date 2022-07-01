@@ -116,6 +116,17 @@ def client(loop, aiohttp_client):
         web.get('/logout', handler.logout),
         web.get('/files/download', handler.download_file),
         web.get('/files/download/queued', handler.download_file_queued),
+        web.get('/users', handler.users),
+        web.get('/roles', handler.roles),
+        web.put('/method/{method_name}', handler.add_method),
+        web.delete('/method/{method_name}', handler.delete_method),
+        web.put('/role/{role_name}', handler.add_role),
+        web.delete('/role/{role_name}', handler.delete_role),
+        web.post('/add_method_to_role', handler.add_method_to_role),
+        web.post('/delete_method_from_role', handler.delete_method_from_role),
+        web.post('/change_shared_prop', handler.change_shared_prop),
+        web.post('/change_user_role', handler.change_user_role),
+        web.post('/change_file_dir', handler.change_file_dir),
     ])
 
     return loop.run_until_complete(aiohttp_client(app))

@@ -121,7 +121,8 @@ class UsersAPI:
         db_session = db.create_session()
         existed_user = db_session.query(db.User).filter_by(email=email).first()
         assert not existed_user, 'User with email {} already exists'.format(email)
-        db_session.add(db.User(email, hashed_password, name, surname))
+        role_visitor = db_session.query(db.Role).filter_by(name="visitor").first()
+        db_session.add(db.User(email, hashed_password, name, surname, role=role_visitor))
         db_session.commit()
 
     @staticmethod

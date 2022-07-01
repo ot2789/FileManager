@@ -8,7 +8,7 @@ from distutils.util import strtobool
 from server.file_service import FileService, FileServiceSigned
 from server.file_loader import FileLoader, QueuedLoader
 from server.users import UsersAPI
-# from server.role_model import RoleModel
+from server.role_model import RoleModel
 
 
 class Handler:
@@ -42,7 +42,7 @@ class Handler:
         })
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def get_files(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for getting info about all files in working directory.
 
@@ -60,7 +60,7 @@ class Handler:
         })
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def get_file_info(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for getting full info about file in working directory.
 
@@ -108,7 +108,7 @@ class Handler:
             }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def create_file(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for creating file.
 
@@ -162,7 +162,7 @@ class Handler:
 
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def delete_file(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for deleting file.
 
@@ -192,7 +192,7 @@ class Handler:
             }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def download_file(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for downloading files from working directory via threads.
 
@@ -234,7 +234,7 @@ class Handler:
             }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def download_file_queued(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for downloading files from working directory via queue.
 
@@ -388,7 +388,7 @@ class Handler:
         })
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def users(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for getting all the users with their roles.
 
@@ -403,10 +403,13 @@ class Handler:
 
         """
 
-        pass
+        return web.json_response(data={
+            'status': 'success',
+            'data': RoleModel.get_users(),
+        })
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def roles(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for getting all the roles with their methods.
 
@@ -421,10 +424,13 @@ class Handler:
 
         """
 
-        pass
+        return web.json_response(data={
+            'status': 'success',
+            'data': RoleModel.get_roles(),
+        })
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def add_method(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for adding method into role model.
 
@@ -439,10 +445,23 @@ class Handler:
 
         """
 
-        pass
+        method_name = request.match_info['method_name']
+
+        try:
+            RoleModel.add_method(method_name)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully added method {}'.format(method_name),
+            })
+
+        except AssertionError as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def delete_method(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for deleting method from role model.
 
@@ -457,10 +476,23 @@ class Handler:
 
         """
 
-        pass
+        method_name = request.match_info['method_name']
+
+        try:
+            RoleModel.delete_method(method_name)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully deleted method {}'.format(method_name),
+            })
+
+        except AssertionError as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def add_role(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for adding role into role method.
 
@@ -475,10 +507,23 @@ class Handler:
 
         """
 
-        pass
+        role_name = request.match_info['role_name']
+
+        try:
+            RoleModel.add_role(role_name)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully added role {}'.format(role_name),
+            })
+
+        except AssertionError as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def delete_role(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for deleting role from role method.
 
@@ -493,10 +538,23 @@ class Handler:
 
         """
 
-        pass
+        role_name = request.match_info['role_name']
+
+        try:
+            RoleModel.delete_role(role_name)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully deleted role {}'.format(role_name),
+            })
+
+        except AssertionError as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def add_method_to_role(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for adding method to role.
 
@@ -515,10 +573,29 @@ class Handler:
 
         """
 
-        pass
+        result = ''
+        stream = request.content
+
+        while not stream.at_eof():
+            line = await stream.read()
+            result += line.decode('utf-8')
+
+        try:
+            data = json.loads(result)
+            RoleModel.add_method_to_role(**data)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully added method {} to role {}'.format(data.get('method'), data.get('role')),
+            })
+
+        except (AssertionError, ValueError) as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def delete_method_from_role(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for deleting method from role.
 
@@ -537,10 +614,30 @@ class Handler:
 
         """
 
-        pass
+        result = ''
+        stream = request.content
+
+        while not stream.at_eof():
+            line = await stream.read()
+            result += line.decode('utf-8')
+
+        try:
+            data = json.loads(result)
+            RoleModel.delete_method_from_role(**data)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully deleted method {} from role {}'.format(
+                    data.get('method'), data.get('role')),
+            })
+
+        except (AssertionError, ValueError) as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def change_shared_prop(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for changing shared property of method.
 
@@ -559,10 +656,30 @@ class Handler:
 
         """
 
-        pass
+        result = ''
+        stream = request.content
+
+        while not stream.at_eof():
+            line = await stream.read()
+            result += line.decode('utf-8')
+
+        try:
+            data = json.loads(result)
+            RoleModel.change_shared_prop(**data)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully changed shared property of method {}. Property is {}'.format(
+                    data.get('method'), 'enabled' if data.get('value') else 'disabled'),
+            })
+
+        except (AssertionError, ValueError) as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def change_user_role(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for setting new role to user.
 
@@ -581,10 +698,30 @@ class Handler:
 
         """
 
-        pass
+        result = ''
+        stream = request.content
+
+        while not stream.at_eof():
+            line = await stream.read()
+            result += line.decode('utf-8')
+
+        try:
+            data = json.loads(result)
+            RoleModel.change_user_role(**data)
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully changed role of user with email {}. New role is {}'.format(
+                    data.get('email'), data.get('role')),
+            })
+
+        except (AssertionError, ValueError) as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     @UsersAPI.authorized
-    # @RoleModel.role_model
+    @RoleModel.role_model
     async def change_file_dir(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Coroutine for changing working directory with files.
 
@@ -602,4 +739,26 @@ class Handler:
 
         """
 
-        pass
+        result = ''
+        stream = request.content
+
+        while not stream.at_eof():
+            line = await stream.read()
+            result += line.decode('utf-8')
+
+        try:
+            data = json.loads(result)
+            path = data.get('path')
+            assert path, 'Directory path is not set'
+            self.file_service.path = path
+            self.file_service_signed.path = path
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'You successfully changed working directory path. New path is {}'.format(data.get('path')),
+            })
+
+        except (AssertionError, ValueError) as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
