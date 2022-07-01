@@ -21,7 +21,12 @@ def commandline_parser():
 
     """
 
-    pass
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-f', '--folder', default=os.getcwd(),
+        help='working directory (absolute or relative path, default: current app folder FileServer)'
+    )
+    return parser
 
 
 def get_file_data():
@@ -41,7 +46,12 @@ def get_file_data():
 
     """
 
-    pass
+    print('Input filename (without extension):')
+    filename = input()
+
+    data = FileServiceNoClass.get_file_data(filename)
+
+    return data
 
 
 def create_file():
@@ -63,7 +73,12 @@ def create_file():
 
     """
 
-    pass
+    print('Input content:')
+    content = input()
+
+    data = FileServiceNoClass.create_file(content)
+
+    return data
 
 
 def delete_file():
@@ -77,7 +92,12 @@ def delete_file():
 
     """
 
-    pass
+    print('Input filename (without extension):')
+    filename = input()
+
+    data = FileServiceNoClass.delete_file(filename)
+
+    return data
 
 
 def change_dir():
@@ -88,7 +108,12 @@ def change_dir():
 
     """
 
-    pass
+    print('Input new working directory path:')
+    new_path = input()
+
+    FileServiceNoClass.change_dir(new_path)
+
+    return True
 
 
 def main():
@@ -101,7 +126,59 @@ def main():
 
     """
 
-    pass
+    parser = commandline_parser()
+    namespace = parser.parse_args(sys.argv[1:])
+    path = namespace.folder
+    FileServiceNoClass.change_dir(path)
+
+    print('Commands:')
+    print('list - get files list')
+    print('get - get file data')
+    print('create - create file')
+    print('delete - delete file')
+    print('chdir - change working directory')
+    print('exit - exit from app')
+    print('\n')
+
+    while True:
+
+        try:
+            print('Input command:')
+            command = input().strip()
+
+            if command == 'list':
+                data = FileServiceNoClass.get_files()
+
+            elif command == 'get':
+                data = get_file_data()
+
+            elif command == 'create':
+                data = create_file()
+
+            elif command == 'delete':
+                data = delete_file()
+
+            elif command == 'chdir':
+                data = change_dir()
+
+            elif command == 'exit':
+                return
+
+            else:
+                raise ValueError('Invalid command')
+
+            output = {
+                'status': 'success',
+                'result': data,
+            }
+        except (ValueError, AssertionError) as err:
+            output = {
+                'status': 'error',
+                'result': str(err),
+            }
+
+        if output:
+            print(f'\n{json.dumps(output, indent=4)}\n')
 
 
 if __name__ == '__main__':

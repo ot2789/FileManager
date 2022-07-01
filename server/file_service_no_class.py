@@ -20,7 +20,8 @@ def change_dir(path):
 
     """
 
-    pass
+    assert os.path.isdir(path), f'Path "{path}" not found or not a directory.'
+    os.chdir(path)
 
 
 def get_file_data(filename):
@@ -43,7 +44,14 @@ def get_file_data(filename):
 
     """
 
-    pass
+    basename = f'{filename}.{EXTENSION}'
+    full_filename = os.path.join(os.getcwd(), basename)
+    assert os.path.exists(full_filename), f'File "{basename}" does not exist'
+
+    metadata = utils.get_metadata(full_filename)
+    with open(full_filename, 'rb') as file_handler:
+        metadata['content'] = file_handler.read().decode('utf-8')
+    return metadata
 
 
 def get_files():
@@ -58,7 +66,16 @@ def get_files():
 
     """
 
-    pass
+    workdir = os.getcwd()
+    data = []
+    files = [f for f in os.listdir(workdir) if os.path.isfile(os.path.join(workdir, f))]
+    files = list([f for f in files if len(f.split('.')) > 1 and f.split('.')[-1] == EXTENSION])
+
+    for file_name in files:
+        file_path = os.path.join(workdir, file_name)
+        data.append(utils.get_metadata(file_path))
+
+    return data
 
 
 def create_file(content=None):
@@ -78,7 +95,26 @@ def create_file(content=None):
 
     """
 
-    pass
+    workdir = os.getcwd()
+
+    # Retry until a new file can be created
+    while 1:
+        basename = f'{utils.generate_string()}.{EXTENSION}'
+        file_path = os.path.join(workdir, basename)
+        # When it doesn't exist we can create it
+        if not os.path.exists(file_path):
+            break
+
+    with open(file_path, 'wb') as file_handler:
+        if not content:
+            content = ''
+        data = bytes(content, 'utf-8')
+        file_handler.write(data)
+
+    metadata = utils.get_metadata(file_path)
+    metadata.pop('edit_date')
+    metadata['content'] = content
+    return metadata
 
 
 def delete_file(filename):
@@ -95,4 +131,11 @@ def delete_file(filename):
 
     """
 
-    pass
+    workdir = os.getcwd()
+    basename = f'{filename}.{EXTENSION}'
+    file_path = os.path.join(workdir, basename)
+    assert os.path.exists(file_path), f'File "{basename}" does not exist'
+
+    os.remove(file_path)
+
+    return basename

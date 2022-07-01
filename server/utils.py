@@ -28,7 +28,9 @@ def generate_string() -> str:
 
     """
 
-    pass
+    letters = string.ascii_letters
+    digits = string.digits
+    return ''.join(random.choice(letters + digits) for i in range(STRING_LENGTH))
 
 
 def convert_date(timestamp: float) -> str:
@@ -44,7 +46,7 @@ def convert_date(timestamp: float) -> str:
 
     """
 
-    pass
+    return datetime.fromtimestamp(timestamp).strftime("%Y.%m.%d %H:%M:%S")
 
 
 def get_metadata(file_path: str) -> dict:
@@ -61,4 +63,9 @@ def get_metadata(file_path: str) -> dict:
             size (int): size of file in bytes.
     """
 
-    pass
+    return {
+        'name': os.path.basename(file_path),
+        'create_date': convert_date(os.path.getctime(file_path)),
+        'edit_date': convert_date(os.path.getmtime(file_path)),
+        'size': os.path.getsize(file_path)
+    }
