@@ -14,7 +14,8 @@ class FileService(metaclass=utils.SingletonMeta):
     EXTENSION = 'txt'
 
     def __init__(self, *args, **kwargs):
-        pass
+        path = kwargs.get('path')
+        self.path = path  # Calls setter
 
     @property
     def path(self) -> str:
@@ -25,7 +26,7 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        return self.__path
 
     @path.setter
     def path(self, value: str):
@@ -36,7 +37,11 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        if not value:
+            raise ValueError('Path must have a valid value!')
+        if not os.path.exists(value):
+            os.mkdir(value)
+        self.__path = value
 
     def get_file_data(self, filename: str, user_id: int = None) -> typing.Dict[str, str]:
         """Get full info about file.
@@ -60,7 +65,14 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        basename = f'{filename}.{self.EXTENSION}'
+        full_filename = os.path.join(self.path, basename)
+        assert os.path.exists(full_filename), f'File "{basename}" does not exist'
+
+        metadata = utils.get_metadata(full_filename)
+        with open(full_filename, 'rb') as file_handler:
+            metadata['content'] = file_handler.read().decode('utf-8')
+        return metadata
 
     async def get_file_data_async(self, filename: str, user_id: int = None) -> typing.Dict[str, str]:
         """Get full info about file. Asynchronous version.
@@ -98,7 +110,15 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        data = []
+        files = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, f))]
+        files = list([f for f in files if len(f.split('.')) > 1 and f.split('.')[-1] == self.EXTENSION])
+
+        for file_name in files:
+            file_path = os.path.join(self.path, file_name)
+            data.append(utils.get_metadata(file_path))
+
+        return data
 
     def create_file(
             self, content: str = None, security_level: str = None, user_id: int = None) -> typing.Dict[str, str]:
@@ -125,7 +145,26 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        # Retry until a new file can be created
+        while 1:
+            basename = f'{utils.generate_string()}.{self.EXTENSION}'
+            file_path = os.path.join(self.path, basename)
+            # When it doesn't exist we can create it
+            if not os.path.exists(file_path):
+                break
+
+        with open(file_path, 'wb') as file_handler:
+            if not content:
+                # Content needs to be empty string for md5 correct calculation
+                content = ''
+
+            data = bytes(content, 'utf-8')
+            file_handler.write(data)
+
+        metadata = utils.get_metadata(file_path)
+        metadata.pop('edit_date')
+        metadata['content'] = content
+        return metadata
 
     async def create_file_async(
             self, content: str = None, security_level: str = None, user_id: int = None) -> typing.Dict[str, str]:
@@ -168,7 +207,13 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        basename = f'{filename}.{self.EXTENSION}'
+        file_path = os.path.join(self.path, basename)
+        assert os.path.exists(file_path), f'File "{basename}" does not exist'
+
+        os.remove(file_path)
+
+        return basename
 
 
 class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):

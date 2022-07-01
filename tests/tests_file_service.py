@@ -14,7 +14,7 @@ import server.config
 # from server.handler import Handler
 # from server.database import DataBase
 # from server.crypto import HashAPI, AESCipher, RSACipher
-import server.file_service_no_class as FileServiceNoClass
+from server.file_service import FileService
 
 # Logging will present extra information when running pytest
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ TEST_FILE_NO_EXIST = "notExist.txt"
 def create_and_move_to_test_folder():
     if not os.path.exists(TEST_FOLDER):
         os.mkdir(TEST_FOLDER)
+    fs = FileService(path=TEST_FOLDER)
     os.chdir(TEST_FOLDER)
 
 
@@ -69,7 +70,7 @@ class TestSuite:
             return metadata.get('name') in TEST_FILES_NAMES
 
         logger.info('Test get files')
-        data = FileServiceNoClass.get_files()
+        data = FileService().get_files()
         exists_files = list(map(extract_name, filter(is_test_file, data)))
         assert len(exists_files) == len(TEST_FILES_NAMES)
         for file in TEST_FILES_NAMES:
@@ -82,7 +83,7 @@ class TestSuite:
         test_file = TEST_FILES_NAMES[1].split('.')[0]
         logger.info('Test get file info - existing')
 
-        data = FileServiceNoClass.get_file_data(test_file)
+        data = FileService().get_file_data(test_file)
         filename = data.get('name')
         assert os.path.exists(os.path.join(os.getcwd(), filename))
         assert filename == TEST_FILES_NAMES[1]
@@ -97,7 +98,7 @@ class TestSuite:
         test_file = TEST_FILE_NO_EXIST.split('.')[0]
 
         try:
-            data = FileServiceNoClass.get_file_data(test_file)
+            data = FileService().get_file_data(test_file)
         except AssertionError as e:
             pass
         else:
@@ -109,7 +110,7 @@ class TestSuite:
         logger.info('Test create file - with content')
         content = 'Something there'
 
-        data = FileServiceNoClass.create_file(content)
+        data = FileService().create_file(content)
         filename = data.get('name')
         assert os.path.exists(os.path.join(os.getcwd(), filename))
         assert data.get('content') == content
@@ -117,7 +118,7 @@ class TestSuite:
         logger.info('Test success')
         logger.info('Test create file - without content')
 
-        data = FileServiceNoClass.create_file()
+        data = FileService().create_file()
         filename = data.get('name')
         assert os.path.exists(os.path.join(os.getcwd(), filename))
         assert not data.get('content')
@@ -125,7 +126,7 @@ class TestSuite:
         logger.info('Test success')
         logger.info('Test get files - with the created files')
 
-        data = FileServiceNoClass.get_files()
+        data = FileService().get_files()
         assert len(data) == len(TEST_FILES_NAMES) + 2
 
         logger.info('Test success')
@@ -134,10 +135,10 @@ class TestSuite:
         test_file_part = TEST_FILES_NAMES[2].split('.')[0]
 
         logger.info('Test delete file - existing')
-        FileServiceNoClass.delete_file(test_file_part)
+        FileService().delete_file(test_file_part)
         assert not os.path.exists(os.path.join(os.getcwd(), TEST_FILES_NAMES[2]))
 
-        data = FileServiceNoClass.get_files()
+        data = FileService().get_files()
         assert len(data) == len(TEST_FILES_NAMES) - 1
 
         logger.info('Test success')
@@ -147,7 +148,7 @@ class TestSuite:
 
         logger.info('Test delete file - not existing')
         try:
-            FileServiceNoClass.delete_file(test_file_part)
+            FileService().delete_file(test_file_part)
         except AssertionError as e:
             pass
         else:
@@ -161,13 +162,13 @@ class TestSuite:
 
         logger.info('Test change dir')
 
-        data = FileServiceNoClass.get_files()
+        data = FileService().get_files()
         assert len(data) == len(TEST_FILES_NAMES)
 
         os.mkdir(new_test_folder)
-        FileServiceNoClass.change_dir(new_test_folder)
+        FileService().path = new_test_folder
 
-        data = FileServiceNoClass.get_files()
+        data = FileService().get_files()
         assert len(data) == 0
 
         logger.info('Test success')

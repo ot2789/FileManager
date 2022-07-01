@@ -13,9 +13,12 @@ class SingletonMeta(type):
     """Meta class for singletons.
 
     """
+    __instance = None
 
     def __call__(cls, **kwargs):
-        pass
+        if not isinstance(cls.__instance, cls):
+            cls.__instance = super().__call__(**kwargs)
+        return cls.__instance
 
 
 def generate_string() -> str:

@@ -49,7 +49,7 @@ def get_file_data():
     print('Input filename (without extension):')
     filename = input()
 
-    data = FileServiceNoClass.get_file_data(filename)
+    data = FileService().get_file_data(filename)
 
     return data
 
@@ -76,7 +76,7 @@ def create_file():
     print('Input content:')
     content = input()
 
-    data = FileServiceNoClass.create_file(content)
+    data = FileService().create_file(content)
 
     return data
 
@@ -95,7 +95,7 @@ def delete_file():
     print('Input filename (without extension):')
     filename = input()
 
-    data = FileServiceNoClass.delete_file(filename)
+    data = FileService().delete_file(filename)
 
     return data
 
@@ -111,7 +111,7 @@ def change_dir():
     print('Input new working directory path:')
     new_path = input()
 
-    FileServiceNoClass.change_dir(new_path)
+    FileService().path = new_path
 
     return True
 
@@ -129,7 +129,7 @@ def main():
     parser = commandline_parser()
     namespace = parser.parse_args(sys.argv[1:])
     path = namespace.folder
-    FileServiceNoClass.change_dir(path)
+    FileService(path=path)
 
     print('Commands:')
     print('list - get files list')
@@ -147,7 +147,7 @@ def main():
             command = input().strip()
 
             if command == 'list':
-                data = FileServiceNoClass.get_files()
+                data = FileService().get_files()
 
             elif command == 'get':
                 data = get_file_data()
