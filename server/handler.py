@@ -18,7 +18,8 @@ class Handler:
     NUMBER_OF_QUE_LOADERS = 2
 
     def __init__(self, path: str):
-        pass
+        self.file_service = FileService(path=path)
+        self.file_service_signed = FileServiceSigned(path=path)
 
     async def handle(self, request: web.Request, *args, **kwargs) -> web.Response:
         """Basic coroutine for connection testing.
@@ -31,7 +32,9 @@ class Handler:
 
         """
 
-        pass
+        return web.json_response(data={
+            'status': 'success'
+        })
 
     # @UsersAPI.authorized
     # @RoleModel.role_model
@@ -46,7 +49,10 @@ class Handler:
 
         """
 
-        pass
+        return web.json_response(data={
+            'status': 'success',
+            'data': self.file_service.get_files(),
+        })
 
     # @UsersAPI.authorized
     # @RoleModel.role_model
@@ -64,7 +70,37 @@ class Handler:
 
         """
 
-        pass
+        try:
+            filename = request.rel_url.query['filename']
+            is_signed = request.rel_url.query['is_signed']
+            user_id = request.rel_url.query.get('user_id')
+            assert is_signed in ['true', 'false'], 'Is_signed is invalid'
+            is_signed = strtobool(is_signed)
+
+            if is_signed:
+                file_service = self.file_service_signed
+            else:
+                file_service = self.file_service
+
+            result = await file_service.get_file_data_async(filename, user_id)
+            result['size'] = '{} bytes'.format(result['size'])
+
+            return web.json_response(data={
+                'status': 'success',
+                'data': result,
+            })
+
+        except (AssertionError, ValueError) as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+
+        except KeyError as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': 'Parameter {} is not set'.format(err)
+            }))
 
     # @UsersAPI.authorized
     # @RoleModel.role_model
@@ -87,7 +123,38 @@ class Handler:
 
         """
 
-        pass
+        result = ''
+        stream = request.content
+
+        while not stream.at_eof():
+            line = await stream.read()
+            result += line.decode('utf-8')
+
+        try:
+            data = json.loads(result)
+            is_signed = data.get('is_signed', False)
+            assert isinstance(is_signed, bool), 'Is_signed should be boolean'
+
+            if is_signed:
+                file_service = self.file_service_signed
+            else:
+                file_service = self.file_service
+
+            result = \
+                await file_service.create_file_async(data.get('content'), data.get('security_level'), data.get('user_id'))
+            result['size'] = '{} bytes'.format(result['size'])
+
+            return web.json_response(data={
+                'status': 'success',
+                'data': result,
+            })
+
+        except (AssertionError, ValueError) as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
+
 
     # @UsersAPI.authorized
     # @RoleModel.role_model
@@ -105,7 +172,19 @@ class Handler:
 
         """
 
-        pass
+        filename = request.match_info['filename']
+
+        try:
+            return web.json_response(data={
+                'status': 'success',
+                'message': 'File {} is successfully deleted'.format(self.file_service.delete_file(filename)),
+            })
+
+        except AssertionError as err:
+            raise web.HTTPBadRequest(text=json.dumps({
+                'status': 'error',
+                'message': str(err)
+            }))
 
     # @UsersAPI.authorized
     # @RoleModel.role_model

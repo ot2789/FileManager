@@ -109,7 +109,7 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        return self.get_file_data(filename, user_id)
 
     def get_files(self) -> typing.List[typing.Dict[str, str]]:
         """Get info about all files in working directory.
@@ -213,7 +213,7 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        return self.create_file(content, security_level, user_id)
 
     def delete_file(self, filename: str):
         """Delete file.
@@ -309,7 +309,7 @@ class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        return self.get_file_data(filename, user_id)
 
     def create_file(
             self, content: str = None, security_level: str = None, user_id: int = None) -> typing.Dict[str, str]:
@@ -373,5 +373,15 @@ class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        result = await super().create_file_async(content, security_level, user_id)
+        signature = HashAPI.hash_md5('_'.join(list(str(x) for x in list(result.values()))))
+        basename = result['name'].split('.')[0]
+        sig_basename = f'{basename}.md5'
+        sig_path = os.path.join(self.path, sig_basename)
+
+        with open(sig_path, 'wb') as file_handler:
+            data = bytes(signature, 'utf-8')
+            file_handler.write(data)
+
+        return result
 

@@ -6,12 +6,12 @@ import os
 import sys
 import logging
 import json
-# from aiohttp import web
+from aiohttp import web
 import server.config
-# from server.handler import Handler
+from server.handler import Handler
 # from server.database import DataBase
 import server.file_service_no_class as FileServiceNoClass
-# from server.file_service import FileService, FileServiceSigned
+from server.file_service import FileService, FileServiceSigned
 
 
 def commandline_parser():
@@ -25,6 +25,9 @@ def commandline_parser():
     parser.add_argument(
         '-f', '--folder', default=os.getcwd(),
         help='working directory (absolute or relative path, default: current app folder FileServer)'
+    )
+    parser.add_argument(
+        '-p', '--port', default='8080', help='port (default: 8080)'
     )
     return parser
 
@@ -131,7 +134,7 @@ def change_dir():
     return True
 
 
-def main():
+def main_console():
     """Entry point of app.
 
     Get and parse command line parameters and configure web app.
@@ -195,6 +198,37 @@ def main():
 
         if output:
             print(f'\n{json.dumps(output, indent=4)}\n')
+
+
+def main():
+    """Entry point of app.
+
+    Get and parse command line parameters and configure web app.
+    Command line options:
+    -f --folder - working directory (absolute or relative path, default: current app folder FileServer).
+    -p --port - port of the server (default: 8080).
+    -h --help - help.
+
+    """
+
+    parser = commandline_parser()
+    namespace = parser.parse_args(sys.argv[1:])
+    path = namespace.folder
+    FileService(path=path)
+    FileServiceSigned(path=path)
+
+    handler = Handler(namespace.folder)
+    app = web.Application()
+    app.add_routes([
+        web.get('/', handler.handle),
+        web.get('/files/list', handler.get_files),
+        web.get('/files', handler.get_file_info),
+        web.post('/files', handler.create_file),
+        web.delete('/files/{filename}', handler.delete_file),
+        web.post('/change_file_dir', handler.change_file_dir),
+    ])
+    logging.basicConfig(level=logging.INFO)
+    web.run_app(app, port=namespace.port)
 
 
 if __name__ == '__main__':
