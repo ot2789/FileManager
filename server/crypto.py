@@ -31,7 +31,9 @@ class HashAPI:
 
         """
 
-        pass
+        assert input_str, 'Hash: input string is not set'
+        hash_obj = hashlib.sha512(input_str.encode())
+        return hash_obj.hexdigest()
 
     @staticmethod
     def hash_md5(input_str: str) -> str:
@@ -48,7 +50,9 @@ class HashAPI:
 
         """
 
-        pass
+        assert input_str, 'Hash: input string is not set'
+        hash_obj = hashlib.md5(input_str.encode())
+        return hash_obj.hexdigest()
 
 
 class BaseCipher:

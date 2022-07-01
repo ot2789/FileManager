@@ -221,12 +221,17 @@ class FileService(metaclass=utils.SingletonMeta):
 
         """
 
+        for extension in (self.EXTENSION, 'md5'):
+            basename = f'{filename}.{extension}'
+            file_path = os.path.join(self.path, basename)
+
+            if extension == self.EXTENSION:
+                assert os.path.exists(file_path), f'File "{basename}" does not exist'
+
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
         basename = f'{filename}.{self.EXTENSION}'
-        file_path = os.path.join(self.path, basename)
-        assert os.path.exists(file_path), f'File "{basename}" does not exist'
-
-        os.remove(file_path)
-
         return basename
 
 
@@ -258,7 +263,20 @@ class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        result = super().get_file_data(filename)
+        result_for_check = dict(result)
+        result_for_check.pop('edit_date')
+
+        sig_basename = f'{filename}.md5'
+        sig_path = os.path.join(self.path, sig_basename)
+        assert os.path.exists(sig_path), 'Signature file {} does not exist'.format(sig_basename)
+
+        signature = HashAPI.hash_md5('_'.join(list(str(x) for x in list(result_for_check.values()))))
+
+        with open(sig_path, 'rb') as file_handler:
+            assert file_handler.read() == bytes(signature, 'utf-8'), 'Signatures do not match!'
+
+        return result
 
     async def get_file_data_async(self, filename: str, user_id: int = None) -> typing.Dict[str, str]:
         """Get full info about file. Asynchronous version.
@@ -310,7 +328,17 @@ class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):
 
         """
 
-        pass
+        result = super().create_file(content, security_level)
+        signature = HashAPI.hash_md5('_'.join(list(str(x) for x in list(result.values()))))
+        basename = result['name'].split('.')[0]
+        sig_basename = f'{basename}.md5'
+        sig_path = os.path.join(self.path, sig_basename)
+
+        with open(sig_path, 'wb') as file_handler:
+            data = bytes(signature, 'utf-8')
+            file_handler.write(data)
+
+        return result
 
     async def create_file_async(
             self, content: str = None, security_level: str = None, user_id: int = None) -> typing.Dict[str, str]:
@@ -338,3 +366,4 @@ class FileServiceSigned(FileService, metaclass=utils.SingletonMeta):
         """
 
         pass
+

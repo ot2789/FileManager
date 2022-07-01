@@ -48,8 +48,14 @@ def get_file_data():
 
     print('Input filename (without extension):')
     filename = input()
+    print('Check signature? y/n (default: n)')
+    check_sig = input().lower().strip() or 'n'
 
-    data = FileService().get_file_data(filename)
+    file_service = FileService()
+    if check_sig == 'y':
+        file_service = FileServiceSigned()
+
+    data = file_service.get_file_data(filename)
 
     return data
 
@@ -77,8 +83,14 @@ def create_file():
     content = input()
     print('Input security:')
     security_level = input()
+    print('Sign file? y/n (default: n)')
+    create_sig = input().lower().strip() or 'n'
 
-    data = FileService().create_file(content, security_level)
+    file_service = FileService()
+    if create_sig == 'y':
+        file_service = FileServiceSigned()
+
+    data = file_service.create_file(content, security_level)
 
     return data
 
@@ -114,6 +126,7 @@ def change_dir():
     new_path = input()
 
     FileService().path = new_path
+    FileServiceSigned().path = new_path
 
     return True
 
@@ -132,6 +145,7 @@ def main():
     namespace = parser.parse_args(sys.argv[1:])
     path = namespace.folder
     FileService(path=path)
+    FileServiceSigned(path=path)
 
     print('Commands:')
     print('list - get files list')
