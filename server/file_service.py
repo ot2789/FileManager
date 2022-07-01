@@ -69,9 +69,18 @@ class FileService(metaclass=utils.SingletonMeta):
         full_filename = os.path.join(self.path, basename)
         assert os.path.exists(full_filename), f'File "{basename}" does not exist'
 
+        filename_parts = filename.split('_')
+        assert len(filename_parts) == 2, 'Invalid format of file name'
+        security_level = filename_parts[1]
+
+        if security_level == 'low':
+            cipher = BaseCipher()
+        else:
+            raise ValueError('Security level is invalid')
+
         metadata = utils.get_metadata(full_filename)
         with open(full_filename, 'rb') as file_handler:
-            metadata['content'] = file_handler.read().decode('utf-8')
+            metadata['content'] = cipher.decrypt(file_handler, filename).decode('utf-8')
         return metadata
 
     async def get_file_data_async(self, filename: str, user_id: int = None) -> typing.Dict[str, str]:
@@ -147,11 +156,16 @@ class FileService(metaclass=utils.SingletonMeta):
 
         # Retry until a new file can be created
         while 1:
-            basename = f'{utils.generate_string()}.{self.EXTENSION}'
+            basename = f'{utils.generate_string()}_{security_level}.{self.EXTENSION}'
             file_path = os.path.join(self.path, basename)
             # When it doesn't exist we can create it
             if not os.path.exists(file_path):
                 break
+
+        if security_level == 'low':
+            cipher = BaseCipher()
+        else:
+            raise ValueError('Security level is invalid')
 
         with open(file_path, 'wb') as file_handler:
             if not content:
@@ -159,7 +173,7 @@ class FileService(metaclass=utils.SingletonMeta):
                 content = ''
 
             data = bytes(content, 'utf-8')
-            file_handler.write(data)
+            cipher.write_cipher_text(data, file_handler, basename.split('.')[0])
 
         metadata = utils.get_metadata(file_path)
         metadata.pop('edit_date')

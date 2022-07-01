@@ -57,7 +57,8 @@ class BaseCipher:
     """
 
     def __init__(self):
-        pass
+        if not os.path.exists(KEY_FOLDER):
+            os.mkdir(KEY_FOLDER)
 
     def encrypt(self, data: bytes):
         """Encrypt data.
@@ -67,7 +68,7 @@ class BaseCipher:
 
         """
 
-        pass
+        return data
 
     def decrypt(self, input_file: BinaryIO, filename: str) -> bytes:
         """Decrypt data.
@@ -81,7 +82,7 @@ class BaseCipher:
 
         """
 
-        pass
+        return input_file.read()
 
     def write_cipher_text(self, data: bytes, out_file: BinaryIO, filename: str):
         """Encrypt data and write cipher text into output file.
@@ -93,7 +94,7 @@ class BaseCipher:
 
         """
 
-        pass
+        out_file.write(self.encrypt(data))
 
 
 class AESCipher(BaseCipher):

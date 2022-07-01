@@ -22,9 +22,11 @@ logger.setLevel(logging.INFO)
 
 EXTENSION_TXT = 'txt'
 TEST_FOLDER = os.path.abspath('../storage')
-TEST_FILES_NAMES = ['beefDead.txt', '12345678.txt', 'testFile.txt', 'catMouse.txt']
+TEST_FILES_PART_NAME = ['beefDead', '12345678', 'testFile', 'catMouse']
+TEST_FILES_SECURITY = ['low', 'low', 'low', 'low']
+TEST_FILES_NAMES = [f'{f}_{s}.{EXTENSION_TXT}' for f, s in zip(TEST_FILES_PART_NAME, TEST_FILES_SECURITY)]
 TEST_FILES_CONTENTS = ['lmao', 'test1', 'test2', 'ABC']
-TEST_FILE_NO_EXIST = "notExist.txt"
+TEST_FILE_NO_EXIST = "notExist_low.txt"
 
 
 def create_and_move_to_test_folder():
@@ -35,7 +37,7 @@ def create_and_move_to_test_folder():
 
 
 def create_test_files():
-    for file_name, content in zip(TEST_FILES_NAMES, TEST_FILES_CONTENTS):
+    for file_name, security, content in zip(TEST_FILES_NAMES, TEST_FILES_SECURITY, TEST_FILES_CONTENTS):
         full_path = os.path.join(os.getcwd(), file_name)
         with open(full_path, 'wb') as file_handler:
             data = bytes(content, 'utf-8')
@@ -110,7 +112,7 @@ class TestSuite:
         logger.info('Test create file - with content')
         content = 'Something there'
 
-        data = FileService().create_file(content)
+        data = FileService().create_file(content, security_level='low')
         filename = data.get('name')
         assert os.path.exists(os.path.join(os.getcwd(), filename))
         assert data.get('content') == content
@@ -118,7 +120,7 @@ class TestSuite:
         logger.info('Test success')
         logger.info('Test create file - without content')
 
-        data = FileService().create_file()
+        data = FileService().create_file(security_level='low')
         filename = data.get('name')
         assert os.path.exists(os.path.join(os.getcwd(), filename))
         assert not data.get('content')

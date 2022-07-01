@@ -75,8 +75,10 @@ def create_file():
 
     print('Input content:')
     content = input()
+    print('Input security:')
+    security_level = input()
 
-    data = FileService().create_file(content)
+    data = FileService().create_file(content, security_level)
 
     return data
 
